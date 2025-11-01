@@ -1,0 +1,57 @@
+import time
+import os
+import shutil
+from pydub import AudioSegment
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# === CONFIGURATION ===
+DOWNLOAD_FOLDER = os.path.expanduser("~/Downloads")
+DESCRIPT_PROJECT_FOLDER = os.path.expanduser("~/Descript Projects/AutoUploads")
+INTRO_FILE = "intro_TTW.mp3"
+OUTRO_FILE = "outro_TTW.mp3"
+
+# Make sure the Descript project folder exists
+os.makedirs(DESCRIPT_PROJECT_FOLDER, exist_ok=True)
+
+# === HELPER FUNCTION TO MERGE AUDIO ===
+def merge_audio(main_audio_path):
+    print(f"Merging audio for: {main_audio_path}")
+    intro = AudioSegment.from_file(INTRO_FILE)
+    main = AudioSegment.from_file(main_audio_path)
+    outro = AudioSegment.from_file(OUTRO_FILE)
+
+    final = intro + main + outro
+    final_name = os.path.basename(main_audio_path).replace(".mp3", "_final.mp3")
+    final_path = os.path.join(DESCRIPT_PROJECT_FOLDER, final_name)
+    final.export(final_path, format="mp3")
+    print(f"✅ Exported and moved to: {final_path}")
+
+# === WATCHDOG EVENT HANDLER ===
+processed_files = set()
+
+class DownloadHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.src_path.lower().endswith((".mp3", ".wav")):
+            if event.src_path in processed_files:
+                return
+            processed_files.add(event.src_path)
+
+            print(f"🎧 New audio detected: {event.src_path}")
+            time.sleep(2)
+            merge_audio(event.src_path)
+
+# === MAIN FUNCTION ===
+if __name__ == "__main__":
+    print("👀 Watching for new audio files in your Downloads folder...")
+    event_handler = DownloadHandler()
+    observer = Observer()
+    observer.schedule(event_handler, DOWNLOAD_FOLDER, recursive=False)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
